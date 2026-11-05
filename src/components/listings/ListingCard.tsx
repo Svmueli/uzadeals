@@ -3,19 +3,26 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Heart, MapPin, ShieldCheck } from "lucide-react";
 import type { Listing } from "@/types";
 import { formatKES } from "@/lib/formatKES";
-import { toggleSave } from "@/lib/api";
+import {
+  getSavedListingIds,
+  setListingSaved,
+} from "@/lib/browser-storage";
 
-type ListingCardProps = {
+interface ListingCardProps {
   listing: Listing;
-};
+}
 
 export default function ListingCard({ listing }: ListingCardProps) {
   const [saved, setSaved] = useState(false);
-  const [savePending, setSavePending] = useState(false);
+  const [saveError, setSaveError] = useState("");
+
+  useEffect(() => {
+    setSaved(getSavedListingIds().includes(listing.id));
+  }, [listing.id]);
 
   const hasProfit =
     typeof listing.monthlyProfitKes === "number" &&
@@ -27,161 +34,140 @@ export default function ListingCard({ listing }: ListingCardProps) {
 
   const hasVerification = listing.verification != null;
 
-  async function handleSave() {
-    if (savePending) return;
-
+  function handleSave() {
     const nextSaved = !saved;
-    setSaved(nextSaved);
-    setSavePending(true);
+    const persisted = setListingSaved(listing.id, nextSaved);
 
-    try {
-      await toggleSave(listing.id);
-    } catch {
-      setSaved(!nextSaved);
-    } finally {
-      setSavePending(false);
+    if (!persisted) {
+      setSaveError("Could not save this change in browser storage.");
+      return;
     }
+
+    setSaved(nextSaved);
+    setSaveError("");
   }
 
   return (
-    <article className="group relative overflow-hidden rounded-[14px] border border-border bg-white transition-transform duration-200 hover:-translate-y-1 motion-reduce:transform-none">
+    <article className="group relative overflow-hidden rounded-card border border-border bg-white transition-shadow hover:shadow-md">
       <Link
         href={`/listings/${listing.slug}`}
-        className="absolute inset-0 z-10 rounded-[14px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-jua"
+        className="absolute inset-0 z-10 rounded-card focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-jua"
         aria-label={`View ${listing.title}`}
-      >
-        <span className="sr-only">View listing: {listing.title}</span>
-      </Link>
+      />
 
-      <div className="relative aspect-[16/9] overflow-hidden bg-msitu">
+      <div className="relative aspect-[4/3] overflow-hidden bg-msitu/10">
         {listing.photos?.[0] ? (
           <Image
             src={listing.photos[0]}
             alt={listing.title}
             fill
-            sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
-            className="object-cover transition-transform duration-300 group-hover:scale-[1.03] motion-reduce:transform-none"
             unoptimized
+            sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+            className="object-cover transition-transform duration-300 motion-reduce:transition-none group-hover:scale-[1.02]"
           />
         ) : (
-          <div className="flex h-full items-center justify-center bg-gradient-to-br from-msitu to-[#1c6049]">
-            <span className="text-5xl" aria-hidden="true">
-              {listing.category}
-            </span>
+          <div className="flex h-full items-center justify-center bg-msitu text-4xl text-white/80">
+            {listing.category}
           </div>
         )}
 
-        <div className="absolute left-3 top-3 rounded-full bg-jua px-3 py-1.5 text-sm font-bold tabular-nums text-ink">
-          {formatKES(listing.askingPriceKes)}
-        </div>
-
-        <span className="absolute bottom-3 left-3 rounded-full bg-ink/85 px-2.5 py-1 text-xs font-semibold text-white">
+        <span className="absolute left-3 top-3 z-20 rounded-full bg-white/95 px-3 py-1 text-xs font-semibold text-ink">
           Demo listing
         </span>
 
         <button
           type="button"
           onClick={handleSave}
-          disabled={savePending}
-          aria-label={saved ? "Remove saved listing" : "Save listing"}
+          aria-label={saved ? "Remove from saved listings" : "Save listing"}
           aria-pressed={saved}
-          className="absolute right-3 top-3 z-20 flex min-h-11 min-w-11 items-center justify-center rounded-full bg-white text-ink shadow-sm transition-colors hover:bg-paper focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-jua disabled:opacity-60"
+          className="absolute right-3 top-3 z-20 flex min-h-11 min-w-11 items-center justify-center rounded-full bg-white/95 text-ink shadow-sm transition-colors hover:text-clay focus-visible:outline focus-visible:outline-2 focus-visible:outline-jua"
         >
           <Heart
             size={19}
             fill={saved ? "currentColor" : "none"}
             className={saved ? "text-clay" : ""}
-            aria-hidden="true"
           />
         </button>
+
+        {hasVerification && (
+          <div className="absolute bottom-3 left-3 z-20 max-w-[85%] rounded-control bg-white/95 px-3 py-2 text-xs text-msitu">
+            <div className="flex items-center gap-1 font-semibold">
+              <ShieldCheck size={14} />
+              Checked by UzaDeals
+            </div>
+            <p className="mt-1 text-ink/65">
+              {listing.verification.checkedItems.join(", ")}
+            </p>
+          </div>
+        )}
       </div>
 
-      <div className="relative">
-        <div className="pointer-events-none space-y-3 p-4">
-          <div className="flex min-h-6 items-start justify-between gap-2">
-            <h2 className="line-clamp-2 text-base font-bold leading-snug text-ink">
+      <div className="pointer-events-none relative z-0 p-4">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wide text-msitu">
+              {listing.category}
+            </p>
+            <h2 className="mt-1 font-display text-xl font-semibold leading-tight text-ink">
               {listing.title}
             </h2>
-
-            {hasVerification && (
-              <details className="pointer-events-auto relative z-20 shrink-0">
-                <summary
-                  className="flex min-h-11 cursor-pointer list-none items-center gap-1 rounded-full px-2 text-xs font-semibold text-leaf hover:bg-paper focus-visible:outline focus-visible:outline-2 focus-visible:outline-jua [&::-webkit-details-marker]:hidden"
-                  aria-label="View verification details"
-                >
-                  <ShieldCheck size={16} aria-hidden="true" />
-                  Verified
-                </summary>
-                <div className="absolute right-0 top-full z-30 mt-1 w-56 rounded-control border border-border bg-white p-3 text-xs shadow-lg">
-                  <p className="mb-2 font-bold text-ink">Checked items</p>
-                  <ul className="list-disc space-y-1 pl-4 text-ink/75">
-                    {listing.verification?.checkedItems.map((item) => (
-                      <li key={item}>{item}</li>
-                    ))}
-                  </ul>
-                </div>
-              </details>
-            )}
           </div>
-
-          <p className="flex items-center gap-1.5 text-sm text-ink/65">
-            <MapPin size={15} aria-hidden="true" />
-            <span>
-              {listing.town}, {listing.county}
+          {listing.negotiable && (
+            <span className="shrink-0 rounded-full bg-jua/15 px-2 py-1 text-[11px] font-semibold text-ink">
+              Negotiable
             </span>
-          </p>
+          )}
+        </div>
 
-          <div
-            className={`grid divide-x divide-border rounded-control bg-paper py-3 ${
-              hasProfit ? "grid-cols-3" : "grid-cols-2"
-            }`}
-          >
-            <div className="px-2">
-              <p className="text-[11px] leading-tight text-ink/55">
-                Monthly profit
-              </p>
-              <p className="mt-1 text-sm font-bold tabular-nums text-ink">
-                {hasProfit
-                  ? formatKES(listing.monthlyProfitKes!)
-                  : "Not stated"}
-              </p>
-            </div>
+        <p className="mt-2 flex items-center gap-1 text-sm text-ink/60">
+          <MapPin size={14} />
+          {listing.town}, {listing.county}
+        </p>
 
-            {paybackMonths !== null && (
-              <div className="px-2">
-                <p className="text-[11px] leading-tight text-ink/55">
-                  Payback
-                </p>
-                <p className="mt-1 text-sm font-bold tabular-nums text-ink">
-                  {paybackMonths.toFixed(1)} months
-                </p>
-              </div>
-            )}
-
-            <div className="px-2">
-              <p className="text-[11px] leading-tight text-ink/55">
-                Operating
-              </p>
-              <p className="mt-1 text-sm font-bold tabular-nums text-ink">
-                {listing.yearsOperating}{" "}
-                {listing.yearsOperating === 1 ? "yr" : "yrs"}
-              </p>
-            </div>
+        <div className="mt-4 grid grid-cols-2 gap-3 border-t border-border pt-3">
+          <div>
+            <p className="text-xs text-ink/55">Asking price</p>
+            <p className="mt-1 font-semibold tabular-nums">
+              {formatKES(listing.askingPriceKes)}
+            </p>
           </div>
-
-          <div className="flex flex-wrap gap-2">
-            {listing.mpesaAccepted && (
-              <span className="rounded-full border border-border px-2.5 py-1 text-xs text-ink/70">
-                M-Pesa
-              </span>
-            )}
-            {listing.sellerFinancing && (
-              <span className="rounded-full border border-border px-2.5 py-1 text-xs text-ink/70">
-                Seller financing
-              </span>
-            )}
+          <div>
+            <p className="text-xs text-ink/55">Monthly profit</p>
+            <p className="mt-1 font-semibold tabular-nums">
+              {hasProfit
+                ? formatKES(listing.monthlyProfitKes as number)
+                : "Not provided"}
+            </p>
           </div>
         </div>
+
+        {paybackMonths !== null && (
+          <p className="mt-3 text-xs text-ink/60">
+            Simple payback estimate:{" "}
+            <strong className="text-ink">
+              {paybackMonths.toFixed(1)} months
+            </strong>
+          </p>
+        )}
+
+        <div className="mt-3 flex flex-wrap gap-2">
+          {listing.mpesaAccepted && (
+            <span className="rounded-full bg-leaf/10 px-2 py-1 text-xs text-leaf">
+              M-Pesa accepted
+            </span>
+          )}
+          {listing.sellerFinancing && (
+            <span className="rounded-full bg-jua/15 px-2 py-1 text-xs text-ink">
+              Seller financing
+            </span>
+          )}
+        </div>
+
+        {saveError && (
+          <p role="status" className="mt-2 text-xs text-clay">
+            {saveError}
+          </p>
+        )}
       </div>
     </article>
   );

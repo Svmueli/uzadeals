@@ -9,7 +9,7 @@ const navigation = [
   { label: "Browse", href: "/browse" },
   { label: "Sell your business", href: "/sell" },
   { label: "How it works", href: "/how-it-works" },
-  { label: "Sign in", href: "/signin" }
+  { label: "Sign in", href: "/sign-in" }
 ];
 
 export default function Header() {
